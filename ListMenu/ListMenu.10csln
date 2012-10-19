@@ -1,0 +1,11 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<solution>
+  <name>ListMenu</name>
+  <properties>
+    <property name="emuLoad.projectName">ListMenu</property>
+    <property name="emuLoadMode">project</property>
+  </properties>
+  <projects>
+    <project path="ListMenu\ListMenu.10cproj" />
+  </projects>
+</solution>

@@ -1,0 +1,182 @@
+; --------------------------------------------
+; Title:   Tutorial1
+; Author:  Zalifer
+; Date:    17/10/2012
+; Version: 
+; --------------------------------------------
+JSR init_devices
+
+JSR init_game
+JSR GameLoop
+JSR GameEnd
+
+:dev_clock DAT 0x0000
+:dev_keyboard DAT 0x0000
+:dev_display DAT 0x0000
+:deviceCount DAT 0x0000
+:gameActive DAT 0x0000
+
+:screenWidth DAT 32
+:screenHeight DAT 12
+:screenOne DAT 0x8000
+:screenTwo DAT 0x8000+(32*12) 
+:currentScreen DAT 0
+:offScreen DAT 0
+
+:font DAT 0xF000
+:goodbyeMessage DAT "Thanks for playing", 0x0000
+:playerX DAT 10
+:playerY DAT 5
+:playerIcon DAT 0xDF21
+:screenOffset DAT 0x8000
+
+
+:find_devices
+	HWN [deviceCount]
+	SET I, 0
+:find_devices_loop
+	HWQ I
+	IFE A, 0xb402 ;clock
+		set [dev_clock], I
+	IFE A, 0x7406 ;Keyboard
+		set [dev_keyboard], I
+	IFE A, 0xf615 ;display
+		set [dev_display], I
+	ADD I, 1
+	ifn I, [deviceCount]
+		SET PC, find_devices_loop
+SET PC, POP
+
+:init_devices
+	JSR find_devices
+	SET [currentScreen], [screenOne]
+	SET [offScreen], [screenTwo]
+	SET A, 0x0000
+	SET B, [currentScreen]
+	HWI [dev_display]
+	
+	SET A, 0
+	HWI [dev_keyboard]
+	
+	SET A, 0
+	SET B, 0
+	HWI [dev_clock]
+SET PC, POP
+
+:setToCurrentScreen
+	SET A, 0
+	SET B, [currentScreen]
+	HWI [dev_display]
+SET PC, POP
+
+:swapScreens
+	IFE [currentScreen], [screenOne]
+		SET PC, ScreenOneSet
+	SET PC, ScreenTwoSet
+	:ScreenOneSet
+		SET [currentScreen], [screenTwo]
+		SET [offScreen], [screenOne]
+		SET PC, swapScreensEnd
+	:ScreenTwoSet
+		SET [currentScreen], [screenOne]
+		SET [offScreen], [screenTwo]
+		SET PC, swapScreensEnd
+	:swapScreensEnd
+	JSR setToCurrentScreen
+SET PC, POP
+
+:init_game
+	SET A, 3
+	SET B, 0xC
+	HWI [dev_display]
+	SET [gameActive], 0x0001
+SET PC, POP
+
+:GameLoop
+	JSR Render
+	JSR HandleInput
+	IFE [gameActive], 0x0001
+		SET PC, GameLoop
+SET PC, POP
+
+:GameEnd
+	SET I, goodbyeMessage
+	JSR RenderString
+	SET PC, END	
+SET PC, POP
+
+:Render
+	JSR ClearScreen
+	JSR RenderPlayer
+	JSR swapScreens
+SET PC, POP
+
+:ClearScreen
+	SET J, 0
+	SET I, [screenWidth]
+	MUL I, [screenHeight]
+:ClearScreenLoop
+	IFE J, I
+		SET PC, ClearScreenEnd
+	SET PUSH, A
+		SET A, J
+		ADD A,[offScreen]
+		SET [A], 0
+	SET A, POP
+	ADD J, 1
+	SET PC, ClearScreenLoop
+:ClearScreenEnd
+SET PC, POP
+SET PC, POP
+
+:RenderPlayer
+	SET I, [playerY]
+	MUL I, [screenWidth]
+	ADD I, [playerX]
+	add I, [offScreen]
+	SET [I], [playerIcon]
+SET PC, POP
+
+:RenderString
+	SET J, [screenOffset]
+:RenderStringLoop
+	SET A, [I]
+	IFE A, 0x0000
+		SET PC,RenderStringFinished
+	BOR A, [font]
+	SET [J], A
+	ADD I, 1
+	ADD J, 1
+	SET PC, RenderStringLoop
+:RenderStringFinished
+SET PC, POP
+
+:ReadFromKeyboardBuffer
+	SET A, 1
+	HWI [dev_keyboard]
+SET PC, POP
+
+:HandleInput
+	JSR ReadFromKeyboardBuffer
+	IFE C, 0
+		SET PC, HandleInputFinished
+	JSR ProcessInput
+	SET PC, HandleInput
+:HandleInputFinished
+SET PC, POP
+
+:ProcessInput
+	IFE C, 0x11
+		SET [gameActive], 0
+	IFE C, 0x77
+		SUB [playerY], 1
+	IFE C, 0x73
+		ADD [playerY], 1
+	IFE C, 0x61
+		SUB [playerX], 1
+	IFE C, 0x64
+		ADD [playerX], 1
+SET PC, POP
+
+:END
+

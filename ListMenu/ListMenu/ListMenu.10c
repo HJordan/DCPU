@@ -1,0 +1,336 @@
+; --------------------------------------------
+; Title:   ListMenu
+; Author:  Zalifer
+; Date:    17/10/2012
+; Version: 1
+
+;********** **********;
+; --------------------------------------------
+JSR CountLines
+SET [screen_buffer_one], [vram_start]
+SET [screen_buffer_two], [screen_width]
+MUL [screen_buffer_two], [screen_height]
+ADD [screen_buffer_two], [screen_buffer_one]
+SET [current_screen], [screen_buffer_one]
+SET [off_screen], [screen_buffer_two]
+
+JSR DetectDevices
+JSR InitDevices
+
+:MainLoop
+	JSR Render
+	JSR HandleInput
+SET PC, MainLoop
+
+JSR EndProgram
+
+;********** Device Detection **********;
+
+:DetectDevices
+	HWN I
+	SET J, 0
+	:DetectDevicesLoop
+		HWQ J
+		
+		IFE A, 0xF615
+			SET PC, displayDetected
+		
+		IFE A, 0x7406
+			SET PC, keyboardDetected
+			
+	:DetectDevicesLoopContinue
+		ADD J, 1
+		
+		IFE J, I
+			SET PC, DetectDevicesLoopEnd
+			
+		SET PC, DetectDevicesLoop
+	:DetectDevicesLoopEnd
+	IFE [display_device], 0
+		SET PC, EndProgram
+	IFE [keyboard_device], 0
+		SET PC, EndProgram
+		
+SET PC, POP
+
+:displayDetected
+	SET [display_device], J
+	SET PC, DetectDevicesLoopContinue
+	
+:keyboardDetected
+	SET [keyboard_device], J
+	SET PC, DetectDevicesLoopContinue
+	
+;********** / Device Detection **********;
+
+;********** DEVICE INIT **********;
+
+:InitDevices
+	JSR InitDisplay
+	JSR InitKeyboard	
+SET PC, POP
+
+:InitDisplay
+	SET A, 0
+	SET B, [current_screen]
+	HWI [display_device]
+SET PC, POP
+
+:InitKeyboard
+	SET A, 0
+	HWI [keyboard_device]
+SET PC, POP
+;********** / DEVICE INIT **********;
+
+;********** HANDLE INPUT **********;
+
+:HandleInput
+	JSR ReadFromKeyboardBuffer
+	IFE C, 0
+		SET PC, HandleInputFinished
+	JSR ProcessInput
+	SET PC, HandleInput
+	:HandleInputFinished
+SET PC,POP
+
+:ReadFromKeyboardBuffer
+	SET A, 1
+	HWI [keyboard_device]
+SET PC, POP
+
+:ProcessInput
+	IFE C, 0x74
+		SET PC, SelectOption
+	IFE C, 0x77
+		SET PC, ScrollUp
+	IFE C, 0x73
+		SET PC, ScrollDown
+SET PC, POP
+
+:SelectOption
+	SET Z, menu_address
+	ADD Z, [current_line]
+	JSR Z
+SET PC, POP
+
+:ScrollUp
+	IFG [current_line], 0
+		SUB [current_line], 1
+SET PC, POP
+
+:ScrollDown
+	SET Z, [current_line]
+	ADD Z, 1
+	IFL Z, [total_lines]
+		ADD [current_line], 1
+SET PC, POP
+
+
+
+
+;********** / HANDLE INPUT **********; 
+
+;********** RENDERING **********;
+
+:Render	
+	
+	JSR ClearScreen
+	SET X, 0
+	SET Y, 0
+	SET I, menu_options
+	JSR SetStart
+	JSR PrepareWriter
+	SET J, 0x0000
+	SET B, [screen_width]
+	MUL B, [screen_height]
+	ADD B, [off_screen]
+	SUB B, 1
+	
+	
+	
+	:loop
+	JSR SetCursor
+	
+	IFG J, B
+		SET PC, loopEnd
+	
+	IFE [I], 0xFFFF
+		SET PC, newline
+	
+	IFE [I], 0xFFFE
+		SET PC, loopEnd
+	
+	SET Z, [I]
+	
+	SET A, [current_line]
+	SUB A, [display_line_start]
+	
+	IFE Y, A
+		BOR Z, 0x0F00
+	IFN Y, A
+		BOR Z, 0xF000
+	SET [J], Z	
+	
+	ADD X, 1
+	ADD I, 1
+	SET PC, loop
+	:loopEnd
+	
+	JSR SwapScreens
+	
+SET PC, POP
+
+:newline
+	SET X, 0
+	ADD Y, 1
+	ADD I, 1
+	JSR SetCursor
+SET PC, loop
+
+:SetCursor
+	SET J, [off_screen]
+	ADD J, X
+	SET Z, Y
+	MUL Z, [screen_width]
+	ADD J, Z
+SET PC, POP
+
+:SetStart
+	IFL [current_line], 6
+		SET PC, atStart
+		
+	SET Z, [total_lines]
+	SUB Z, 7
+	
+	IFG [current_line], Z
+		SET PC, atEnd
+	
+	:scroll
+		SET [display_line_start], [current_line]
+		SUB [display_line_start], 5
+		SET PC, setStartEnd
+		
+	:atStart
+		SET [display_line_start], 0
+		SET PC, setStartEnd
+		
+	:atEnd
+		SET [display_line_start], [total_lines]
+		SUB [display_line_start], [screen_height]
+		SET PC, setStartEnd
+
+:setStartEnd	
+SET PC, POP
+
+:PrepareWriter
+	SET Z, [display_line_start]
+	
+	
+		
+	:PrepareWriterLoop
+		
+	IFE Z, 0
+		SET PC, PrepareWriterEnd
+	
+	IFE [I], 0xFFFF
+		SET PC, EndOfWord
+
+	IFE [I], 0xFFFE
+		SET PC, PrepareWriterEnd
+		
+	ADD I, 1
+	SET PC, PrepareWriterLoop
+	
+	:EndOfWord
+		SUB Z, 1
+		ADD I, 1
+		SET PC, PrepareWriterLoop
+	
+:PrepareWriterEnd
+SET PC, POP
+
+:ClearScreen
+	SET A, [off_screen]
+	SET B, [screen_width]
+	MUL B, [screen_height]
+	ADD B, [off_screen]
+	SUB B, 1
+	
+	:ClearScreenLoop
+		IFG A, B
+			SET PC, ClearScreenLoopEnd
+		SET [A], 0x0000
+		ADD A, 1
+		SET PC, ClearScreenLoop
+	:ClearScreenLoopEnd
+SET PC, POP
+
+:SwapScreens
+	IFE [current_screen], [screen_buffer_two]
+		SET PC, SwapScreensTwo
+	:SwapScreensOne
+		SET [current_screen], [screen_buffer_two]
+		SET [off_screen], [screen_buffer_one]
+		SET PC, SwapScreensEnd
+	:SwapScreensTwo
+		SET [current_screen], [screen_buffer_one]
+		SET [off_screen], [screen_buffer_two]
+		SET PC, SwapScreensEnd
+	:SwapScreensEnd
+	JSR InitDisplay
+SET PC, POP
+
+;********** / RENDERING **********;
+
+:CountLines
+	SET [total_lines], 0
+	SET A, menu_options
+	:CountLinesLoop
+		IFE [A], 0xFFFE
+			SET PC, CountLinesLoopEnd
+		
+		IFE [A], 0xFFFF
+			ADD [total_lines], 1
+		
+		ADD A, 1
+		SET PC, CountLinesLoop
+	:CountLinesLoopEnd	
+SET PC, POP
+
+:EndProgram
+	SET PC, END
+SET PC, POP
+
+;Hardware Devices
+:display_device DAT 0
+:screen_height DAT 12
+:screen_width DAT 32
+
+:keyboard_device DAT 0
+
+;Video settings
+:vram_start DAT 0x8000
+:screen_buffer_one DAT 0x0000
+:screen_buffer_two DAT 0x0000
+:current_screen DAT 0x0000
+:off_screen DAT 0x0000
+
+;Information about the menu options
+:display_line_start DAT 0
+:total_lines DAT 0
+:current_line DAT 6
+:menu_options DAT 	"Alpha", 0xFFFF, "Bravo", 0xFFFF, "Charlie", 0xFFFF, "Delta", 0xFFFF, "Echo", 0xFFFF, "Foxtrot", 0xFFFF, "Golf", 0xFFFF, "Hotel", 0xFFFF, "India", 0xFFFF, "Juliet", 0xFFFF, "Kilo", 0xFFFF, "Lima", 0xFFFF, "Mike", 0xFFFF, "November", 0xFFFF, "Oscar", 0xFFFF, "Papa", 0xFFFF, "Quebec", 0xFFFF, "Romeo", 0xFFFF, "Siera", 0xFFFF, "Tango", 0xFFFF, "Uniform", 0xFFFF, "Victor", 0xFFFF, "Whiskey", 0xFFFF, "X-ray", 0xFFFF, "Yankee", 0xFFFF, "Zulu", 0xFFFF, 0xFFFE
+:menu_address DAT	Alpha
+
+:Alpha
+	JSR ClearScreen
+	
+	SET [off_screen], 0xF067
+	
+	JSR SwapScreens
+	
+	SET PC, EndProgram
+SET PC, POP
+					
+:END
+					

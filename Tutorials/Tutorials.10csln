@@ -1,0 +1,11 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<solution>
+  <name>Tutorials</name>
+  <properties>
+    <property name="emuLoad.projectName">Tutorial1</property>
+    <property name="emuLoadMode">project</property>
+  </properties>
+  <projects>
+    <project path="Tutorial1\Tutorial1.10cproj" />
+  </projects>
+</solution>
